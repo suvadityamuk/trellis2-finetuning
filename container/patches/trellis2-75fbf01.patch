@@ -1,0 +1,140 @@
+diff --git a/data_toolkit/blender_script/render_cond.py b/data_toolkit/blender_script/render_cond.py
+index c3f87e2..698507b 100644
+--- a/data_toolkit/blender_script/render_cond.py
++++ b/data_toolkit/blender_script/render_cond.py
+@@ -43,7 +43,6 @@ def init_render(engine='CYCLES', resolution=512):
+     bpy.context.scene.render.image_settings.color_mode = 'RGBA'
+     bpy.context.scene.render.film_transparent = True
+     
+-    bpy.context.scene.cycles.device = 'GPU'
+     bpy.context.scene.cycles.samples = 32
+     bpy.context.scene.cycles.filter_type = 'BOX'
+     bpy.context.scene.cycles.filter_width = 1
+@@ -53,8 +52,15 @@ def init_render(engine='CYCLES', resolution=512):
+     bpy.context.scene.cycles.transmission_bounces = 3
+     bpy.context.scene.cycles.use_denoising = True
+         
+-    bpy.context.preferences.addons['cycles'].preferences.get_devices()
+-    bpy.context.preferences.addons['cycles'].preferences.compute_device_type = 'CUDA'
++    prefs = bpy.context.preferences.addons['cycles'].preferences
++    try:
++        prefs.compute_device_type = 'OPTIX'          # set backend FIRST; fallback 'CUDA' if OPTIX unavailable
++    except TypeError:
++        prefs.compute_device_type = 'CUDA'
++    prefs.get_devices()
++    for d in prefs.devices:
++        d.use = (d.type in ('OPTIX', 'CUDA'))        # enable the GPU(s)
++    bpy.context.scene.cycles.device = 'GPU'
+     
+ 
+ def init_scene() -> None:
+diff --git a/data_toolkit/dual_grid.py b/data_toolkit/dual_grid.py
+index f9a3621..14c5f63 100755
+--- a/data_toolkit/dual_grid.py
++++ b/data_toolkit/dual_grid.py
+@@ -103,7 +103,9 @@ if __name__ == '__main__':
+     parser.add_argument('--rank', type=int, default=0)
+     parser.add_argument('--resolution', type=str, default=256)
+     parser.add_argument('--world_size', type=int, default=1)
+-    parser.add_argument('--max_workers', type=int, default=0)
++    # Each worker issues GPU o_voxel kernels; os.cpu_count() threads (the old
++    # 0 -> cpu_count fallback) can oversubscribe / OOM the single GPU at scale. 8 is safe.
++    parser.add_argument('--max_workers', type=int, default=8)
+     opt = parser.parse_args(sys.argv[2:])
+     opt = edict(vars(opt))
+     opt.resolution = [int(x) for x in opt.resolution.split(',')]
+diff --git a/data_toolkit/dump_mesh.py b/data_toolkit/dump_mesh.py
+index c3200bf..1415c8d 100755
+--- a/data_toolkit/dump_mesh.py
++++ b/data_toolkit/dump_mesh.py
+@@ -17,9 +17,8 @@ BLENDER_INSTALLATION_PATH = '/tmp'
+ BLENDER_PATH = f'{BLENDER_INSTALLATION_PATH}/blender-4.5.1-linux-x64/blender'
+ 
+ def _install_blender():
++    # GL/X libs are provided by the image (packages.txt); no runtime apt/sudo on HF Jobs.
+     if not os.path.exists(BLENDER_PATH):
+-        os.system('sudo apt-get update')
+-        os.system('sudo apt-get install -y libxrender1 libxi6 libxkbcommon-x11-0 libsm6 libxfixes3 libgl1')
+         os.system(f'wget {BLENDER_LINK} -P {BLENDER_INSTALLATION_PATH}')
+         os.system(f'tar -xvf {BLENDER_INSTALLATION_PATH}/blender-4.5.1-linux-x64.tar.xz -C {BLENDER_INSTALLATION_PATH}')
+ 
+@@ -68,7 +67,10 @@ if __name__ == '__main__':
+     dataset_utils.add_args(parser)
+     parser.add_argument('--rank', type=int, default=0)
+     parser.add_argument('--world_size', type=int, default=1)
+-    parser.add_argument('--max_workers', type=int, default=0)
++    # Each worker spawns a `blender -b` process. Defaulting to os.cpu_count() (the
++    # old 0 -> cpu_count fallback) over-subscribes the box: ~50 concurrent Blender
++    # startups crash 30-60% of the time before writing their pickle. 8 is safe.
++    parser.add_argument('--max_workers', type=int, default=8)
+     opt = parser.parse_args(sys.argv[2:])
+     opt = edict(vars(opt))
+     opt.download_root = opt.download_root or opt.root
+diff --git a/data_toolkit/render_cond.py b/data_toolkit/render_cond.py
+index d8a0dc2..15ad11e 100644
+--- a/data_toolkit/render_cond.py
++++ b/data_toolkit/render_cond.py
+@@ -20,8 +20,6 @@ BLENDER_PATH = f'{BLENDER_INSTALLATION_PATH}/blender-3.0.1-linux-x64/blender'
+ 
+ def _install_blender():
+     if not os.path.exists(BLENDER_PATH):
+-        os.system('sudo apt-get update')
+-        os.system('sudo apt-get install -y libxrender1 libxi6 libxkbcommon-x11-0 libsm6 libxfixes3 libgl1')
+         os.system(f'wget {BLENDER_LINK} -P {BLENDER_INSTALLATION_PATH}')
+         os.system(f'tar -xvf {BLENDER_INSTALLATION_PATH}/blender-3.0.1-linux-x64.tar.xz -C {BLENDER_INSTALLATION_PATH}')
+ 
+diff --git a/trellis2/modules/image_feature_extractor.py b/trellis2/modules/image_feature_extractor.py
+index c3cb515..93ec79f 100644
+--- a/trellis2/modules/image_feature_extractor.py
++++ b/trellis2/modules/image_feature_extractor.py
+@@ -79,16 +79,15 @@ class DinoV3FeatureExtractor:
+         self.model.cpu()
+ 
+     def extract_features(self, image: torch.Tensor) -> torch.Tensor:
++        # Pre-norm DINOv3 patch tokens. In transformers>=5 the transformer blocks are
++        # nested in the model's `.model` encoder (DINOv3ViTModel -> DINOv3ViTEncoder),
++        # so we call that encoder with its (hidden_states, position_embeddings) forward
++        # signature instead of hand-iterating a `self.model.layer` list (which no longer
++        # exists — iterating it raised "'DINOv3ViTModel' object has no attribute 'layer'").
+         image = image.to(self.model.embeddings.patch_embeddings.weight.dtype)
+         hidden_states = self.model.embeddings(image, bool_masked_pos=None)
+         position_embeddings = self.model.rope_embeddings(image)
+-
+-        for i, layer_module in enumerate(self.model.layer):
+-            hidden_states = layer_module(
+-                hidden_states,
+-                position_embeddings=position_embeddings,
+-            )
+-
++        hidden_states = self.model.model(hidden_states, position_embeddings).last_hidden_state
+         return F.layer_norm(hidden_states, hidden_states.shape[-1:])
+         
+     @torch.no_grad()
+diff --git a/trellis2/trainers/flow_matching/mixins/image_conditioned.py b/trellis2/trainers/flow_matching/mixins/image_conditioned.py
+index 13b932e..355400d 100644
+--- a/trellis2/trainers/flow_matching/mixins/image_conditioned.py
++++ b/trellis2/trainers/flow_matching/mixins/image_conditioned.py
+@@ -81,16 +81,16 @@ class DinoV3FeatureExtractor:
+         self.model.cpu()
+ 
+     def extract_features(self, image: torch.Tensor) -> torch.Tensor:
++        # Run DINOv3 up to (but not including) its final LayerNorm, then apply a
++        # parameter-free layer-norm — i.e. pre-norm patch tokens. In transformers>=5
++        # the transformer blocks are nested in the model's `.model` encoder
++        # (DINOv3ViTModel -> DINOv3ViTEncoder), so we call that encoder with the same
++        # (hidden_states, position_embeddings) signature its own forward uses, rather
++        # than hand-iterating a `self.model.layer` list (which no longer exists).
+         image = image.to(self.model.embeddings.patch_embeddings.weight.dtype)
+         hidden_states = self.model.embeddings(image, bool_masked_pos=None)
+         position_embeddings = self.model.rope_embeddings(image)
+-
+-        for i, layer_module in enumerate(self.model.layer):
+-            hidden_states = layer_module(
+-                hidden_states,
+-                position_embeddings=position_embeddings,
+-            )
+-
++        hidden_states = self.model.model(hidden_states, position_embeddings).last_hidden_state
+         return F.layer_norm(hidden_states, hidden_states.shape[-1:])
+         
+     @torch.no_grad()

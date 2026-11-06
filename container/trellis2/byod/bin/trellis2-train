@@ -1,0 +1,2 @@
+#!/bin/sh
+exec python /workspace/TRELLIS.2/byod/train.py "$@"

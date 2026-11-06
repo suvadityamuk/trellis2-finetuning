@@ -1,0 +1,14 @@
+git
+wget
+ca-certificates
+xvfb
+libgl1-mesa-glx
+libglu1-mesa
+libxrender1
+libxi6
+libxkbcommon-x11-0
+libsm6
+libxfixes3
+libxrandr2
+libxxf86vm1
+libjpeg-dev
