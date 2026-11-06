@@ -16,29 +16,6 @@ There are two ways to run it, and both do the same work:
   `preprocess.py` and `finetune.py` run inside the base image with this repo mounted,
   and are easy to read and change.
 
-Contents:
-[Using the containers](#using-the-containers) ·
-[One-script version](#one-script-version) ·
-[Evaluate](#evaluate) ·
-[What's in the images](#whats-in-the-images) ·
-[Rebuild the images](#rebuild-the-images) ·
-[Published artifacts](#published-artifacts)
-
-```
-trellis2-finetuning/
-├── preprocess.py            one script: folder of meshes  -> training latents
-├── finetune.py              one script: training latents  -> LoRA adapters
-├── container/               everything inside the published Docker images
-│   ├── Dockerfile           the base image (CUDA extensions, Blender, PEFT, Trackio)
-│   ├── prep.Dockerfile      -prep image  (adds trellis2-prep)
-│   ├── train.Dockerfile     -train image (adds trellis2-train)
-│   ├── packages.txt         apt packages (headless GL / X for Blender)
-│   ├── STARTER.md           README shipped inside the image
-│   ├── patches/             our changes to upstream TRELLIS.2 files
-│   └── trellis2/            our files, laid out at their paths in the TRELLIS.2 tree
-└── LICENSE                  TRELLIS.2's MIT license (Microsoft)
-```
-
 ## Using the containers
 
 ### The images
@@ -48,18 +25,6 @@ trellis2-finetuning/
 | [`cr.hf.co/suvadityamuk/trellis2-finetuning`](https://huggingface.co/containers/suvadityamuk/trellis2-finetuning) | `bash` | | the base environment, for your own code or the [one-script version](#one-script-version). Mirrored on Docker Hub as [`hfsuvadityamuk/trellis2-starter`](https://hub.docker.com/r/hfsuvadityamuk/trellis2-starter) |
 | [`cr.hf.co/suvadityamuk/trellis2-finetuning-prep`](https://huggingface.co/containers/suvadityamuk/trellis2-finetuning-prep) | `trellis2-prep` | a Hub repo of meshes | a dataset repo with every intermediate, the latents, the renders and a held-out split |
 | [`cr.hf.co/suvadityamuk/trellis2-finetuning-train`](https://huggingface.co/containers/suvadityamuk/trellis2-finetuning-train) | `trellis2-train` | that dataset repo + a `config.json` | LoRA checkpoints in a model repo, metrics on a Trackio Space |
-
-The `-prep` and `-train` images are the base image plus a few files, so all three have
-the same environment:
-
-| | |
-|---|---|
-| Base | `pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel` (torch 2.6, CUDA 12.4, `nvcc`) |
-| CUDA extensions | flash-attn 2.7.3, FlexGEMM, CuMesh, nvdiffrast, nvdiffrec, o-voxel |
-| Fine-tuning stack | PEFT, Accelerate, Trackio, safetensors, transformers 5.18 (for DINOv3) |
-| Blender | 3.0.1 (renders) and 4.5.1 (mesh dumps) at `/tmp/blender-*-linux-x64/blender`, plus `xvfb` |
-| Code | TRELLIS.2 at `/workspace/TRELLIS.2` (the working directory), with our [patch and files](#whats-in-the-images) |
-| GPUs | Ampere (A100, A10, A40, RTX 30xx), Ada (L4, L40S, RTX 40xx), Hopper (H100) |
 
 The images contain no weights or data. TRELLIS.2-4B (MIT) downloads on first use into
 `/root/.cache/huggingface`. DINOv3, the image encoder that conditions training, is
@@ -299,17 +264,6 @@ hf buckets create your-username/trellis2-work --private
 hf jobs run ... -v hf://buckets/your-username/trellis2-work:/workspace/work ...
 ```
 
-### Environment variables and paths
-
-| | |
-|---|---|
-| `HF_TOKEN` | Hub access; must have DINOv3 access for training |
-| `TRACKIO_SPACE_ID` | default Trackio Space for `trellis2-train` and `finetune.py` |
-| `HF_HOME=/root/.cache/huggingface` | model weights, Hub cache and local Trackio logs |
-| `/workspace/TRELLIS.2` | TRELLIS.2 with our changes; also `finetune_lora.py`, `configs/lora/`, `scripts/eval_geometry.py` |
-| `/workspace/work` | default working directory of `trellis2-prep` (`prep/`) and `trellis2-train` (`train/`) |
-| `/workspace/STARTER.md` | a short guide to writing your own training loop in the base image |
-
 ### Limits
 
 - Only geometry is fine-tuned; textures come from the base model.
@@ -408,38 +362,6 @@ python scripts/eval_geometry.py \
   --out_dir /workspace/work/eval --pipeline_type 512 --tau 0.02 --num_points 50000
 ```
 
-## What's in the images
-
-The TRELLIS.2 tree in every image is upstream
-[`microsoft/TRELLIS.2@75fbf01`](https://github.com/microsoft/TRELLIS.2/tree/75fbf0183001ed9876c8dbb35de6b68552ee08bd),
-with `container/patches/` applied and `container/trellis2/` copied on top. That
-reproduces, file for file, the project's working TRELLIS.2 tree that the images were
-built from.
-
-**`patches/trellis2-75fbf01.patch`** changes six upstream files:
-
-| file | change |
-|---|---|
-| `trellis2/modules/image_feature_extractor.py`, `trellis2/trainers/flow_matching/mixins/image_conditioned.py` | DINOv3 features on transformers 5.x, which nests the encoder blocks under `.model`. **Required**: without it the feature extractor crashes |
-| `data_toolkit/blender_script/render_cond.py` | select the GPU device for Cycles correctly (OptiX, falling back to CUDA) |
-| `data_toolkit/dump_mesh.py`, `data_toolkit/render_cond.py` | no runtime `sudo apt-get` (the image ships the libraries) |
-| `data_toolkit/dump_mesh.py`, `data_toolkit/dual_grid.py` | default `--max_workers` of 8 instead of one per CPU core, which crashed Blender and oversubscribed the GPU |
-
-**`trellis2/`** holds our files, at their paths inside `/workspace/TRELLIS.2`:
-
-| path | role |
-|---|---|
-| `finetune_lora.py` | the Accelerate + PEFT trainer used for the footwear run, and what `trellis2-train` launches (`finetune.py` is the same loop, plus data download and Hub handling) |
-| `configs/lora/ss_flow_lora_gso.json`, `slat_flow_img2shape_lora_gso.json` | hyperparameters for the two flows (the `ss` and `shape` presets) |
-| `data_toolkit/datasets/MeshFolder.py` | toolkit adapter for any folder of meshes |
-| `data_toolkit/datasets/GSO.py` | toolkit adapter for Google Scanned Objects |
-| `byod/prep.py`, `byod/train.py`, `byod/bin/` | the `trellis2-prep` and `trellis2-train` commands |
-| `scripts/eval_geometry.py` | held-out evaluation, base vs LoRA |
-| `jobs/run_full.sh` | the HF Jobs entrypoint of the footwear run: materialize GSO, preprocess, split, train both flows, evaluate |
-| `jobs/footwear_ids.txt` | the 188 GSO footwear object IDs |
-| `jobs/make_holdout.py` | group-aware held-out split (`trellis2-prep`'s `split` stage; inlined in `preprocess.py`) |
-| `jobs/log_eval.py`, `jobs/log_mesh_artifacts.py` | send eval results and meshes to Trackio |
-
 ## Rebuild the images
 
 The build context is the root of this repo. The image compiles CUDA extensions, so
@@ -456,16 +378,6 @@ By default, CUDA kernels are built for Ampere, Ada and Hopper
 build faster. To use the code without Docker, check out upstream at `75fbf01`, run
 `git apply container/patches/trellis2-75fbf01.patch`, copy `container/trellis2/` over
 the checkout, and point the scripts at it with `--trellis-root` (or `$TRELLIS2_ROOT`).
-
-## Published artifacts
-
-| | |
-|---|---|
-| [`cr.hf.co/suvadityamuk/trellis2-finetuning`](https://huggingface.co/containers/suvadityamuk/trellis2-finetuning) | the base image (mirror: [`hfsuvadityamuk/trellis2-starter`](https://hub.docker.com/r/hfsuvadityamuk/trellis2-starter)) |
-| [`-prep`](https://huggingface.co/containers/suvadityamuk/trellis2-finetuning-prep), [`-train`](https://huggingface.co/containers/suvadityamuk/trellis2-finetuning-train) | the base image plus `trellis2-prep` / `trellis2-train` |
-| [`suvadityamuk/gso-footwear`](https://huggingface.co/datasets/suvadityamuk/gso-footwear) | the 188 raw footwear scans |
-| [`suvadityamuk/gso-footwear-trellis2-latents`](https://huggingface.co/datasets/suvadityamuk/gso-footwear-trellis2-latents) | the same shoes, preprocessed (2 GB) |
-| [`suvadityamuk/trellis-2-finetune-gso`](https://huggingface.co/suvadityamuk/trellis-2-finetune-gso) | our adapters (every 500 steps) and evaluation meshes |
 
 ## Credits and licenses
 
