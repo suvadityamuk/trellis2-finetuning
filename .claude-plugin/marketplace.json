@@ -1,0 +1,19 @@
+{
+  "name": "trellis2-finetuning",
+  "owner": {
+    "name": "Suvaditya Mukherjee"
+  },
+  "metadata": {
+    "description": "Agent skill for LoRA fine-tuning TRELLIS.2 geometry on your own 3D meshes",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "trellis2-lora",
+      "description": "Preprocess meshes, train TRELLIS.2 geometry LoRA adapters on Hugging Face Jobs, and generate meshes with them",
+      "source": "./",
+      "strict": false,
+      "skills": ["./skills/trellis2-lora"]
+    }
+  ]
+}

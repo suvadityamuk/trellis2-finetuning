@@ -16,6 +16,9 @@ There are two ways to run it, and both do the same work:
   `preprocess.py` and `finetune.py` run inside the base image with this repo mounted,
   and are easy to read and change.
 
+To have a coding agent (Claude Code, Codex, Cursor, ...) run it for you, see
+[Use it with an agent](#use-it-with-an-agent).
+
 ## Using the containers
 
 ### The images
@@ -378,6 +381,38 @@ By default, CUDA kernels are built for Ampere, Ada and Hopper
 build faster. To use the code without Docker, check out upstream at `75fbf01`, run
 `git apply container/patches/trellis2-75fbf01.patch`, copy `container/trellis2/` over
 the checkout, and point the scripts at it with `--trellis-root` (or `$TRELLIS2_ROOT`).
+
+## Use it with an agent
+
+[`skills/trellis2-lora/`](skills/trellis2-lora/SKILL.md) is an
+[Agent Skill](https://agentskills.io) for the whole workflow: preprocessing, both training
+runs, monitoring, and generating meshes with the adapters. It has the agent confirm GPU
+cost before every job, do a dry run first, and keep repos private.
+
+**Claude Code:**
+
+```
+/plugin install trellis2-lora --marketplace suvadityamuk/trellis2-finetuning
+```
+
+On versions before 2.1.275, run `/plugin marketplace add suvadityamuk/trellis2-finetuning`
+first, then `/plugin install trellis2-lora@trellis2-finetuning`.
+
+**Any other agent** that reads skills from a folder (`~/.agents/skills` is shared by many):
+
+```bash
+git clone --depth 1 https://github.com/suvadityamuk/trellis2-finetuning /tmp/trellis2-finetuning
+cp -r /tmp/trellis2-finetuning/skills/trellis2-lora ~/.agents/skills/
+```
+
+Then ask in plain words:
+
+> Fine-tune TRELLIS.2 on the meshes in `your-username/my-meshes` and push the LoRA to
+> `your-username/my-trellis2-lora`. Do a dry run first.
+
+> Generate a 3D shoe from `shoe.png` with the footwear LoRA and compare it to the base model.
+
+Coding agents working on this repo should read [`AGENTS.md`](AGENTS.md).
 
 ## Credits and licenses
 
