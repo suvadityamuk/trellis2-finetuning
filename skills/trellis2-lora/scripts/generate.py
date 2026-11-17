@@ -77,7 +77,7 @@ def export_glb(mesh, path: str, texture_size: int) -> None:
         attr_layout=mesh.layout, voxel_size=mesh.voxel_size,
         aabb=[[-0.5, -0.5, -0.5], [0.5, 0.5, 0.5]], decimation_target=1000000,
         texture_size=texture_size, remesh=True, remesh_band=1, remesh_project=0, verbose=False)
-    glb.export(path, extension_webp=True)
+    glb.export(path)  # PNG textures; this Pillow build rejects the RGBA WebP upstream uses
     print(f"[generate] wrote {path}")
 
 

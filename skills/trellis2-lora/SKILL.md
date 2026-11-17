@@ -135,6 +135,7 @@ loads both adapters into the base pipeline and writes base-vs-LoRA GLBs to a Hub
 | near-duplicate variants land in both train and holdout | name them `<model>_in_<variant>` (or `_Color_`, `_Size_`), or dedupe first |
 | CUDA OOM in training on a 24 GB GPU | `--set batch_size=2 grad_accum=8`, or use `a100-large` |
 | job killed at timeout | re-run the identical command; both commands resume |
+| prep log says `held out N/N objects ... train sees 0` | mesh filenames are hash-like and an older `-prep` image grouped them all together. Train with `--no-holdout`, or rebuild the `-prep` image and re-run `--stages split` |
 
 ## Running locally instead of HF Jobs
 

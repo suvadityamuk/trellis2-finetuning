@@ -58,9 +58,14 @@ def base_model(object_id: str) -> str:
     (e.g. `WhiteCoffeeSand`). Heuristic, but it catches the obvious same-mesh
     variants; distinct models keep distinct keys.
     """
+    parts = object_id.split("__")             # MeshFolder joins path parts with "__"
+    if len(parts) > 1 and parts[-1].lower() in {"model", "mesh", "scene"}:
+        object_id = parts[-2]                 # `objects__<id>__model` -> `<id>`
+    else:
+        object_id = parts[-1]                 # `mesh_glb__<name>` -> `<name>`
     s = re.split(r"_(?:in|Color|Size)_", object_id)[0]
     s = re.sub(r"_[A-Za-z0-9]{10,}$", "", s)   # trailing hash or long colorway word
-    return s.lower()
+    return (s or object_id).lower()
 
 
 def main() -> None:

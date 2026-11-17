@@ -104,9 +104,14 @@ def base_model(object_id: str) -> str:
     `_Color_<...>` / `_Size_<...>` clause and a final long hash or CamelCase colorway
     token. For other naming it leaves ids distinct, i.e. a plain seeded split.
     """
+    parts = object_id.split("__")             # MeshFolder joins path parts with "__"
+    if len(parts) > 1 and parts[-1].lower() in {"model", "mesh", "scene"}:
+        object_id = parts[-2]                 # `objects__<id>__model` -> `<id>`
+    else:
+        object_id = parts[-1]                 # `mesh_glb__<name>` -> `<name>`
     s = re.split(r"_(?:in|Color|Size)_", object_id)[0]
-    s = re.sub(r"_[A-Za-z0-9]{10,}$", "", s)
-    return s.lower()
+    s = re.sub(r"_[A-Za-z0-9]{10,}$", "", s)   # trailing hash or long colorway word
+    return (s or object_id).lower()
 
 
 def make_holdout(root: str, frac: float, seed: int) -> None:
