@@ -6,5 +6,6 @@ ARG BASE=cr.hf.co/suvadityamuk/trellis2-finetuning:latest
 FROM ${BASE}
 COPY container/trellis2/data_toolkit/datasets/MeshFolder.py /workspace/TRELLIS.2/data_toolkit/datasets/MeshFolder.py
 COPY container/trellis2/byod/prep.py /workspace/TRELLIS.2/byod/prep.py
+COPY container/trellis2/jobs/make_holdout.py /workspace/TRELLIS.2/jobs/make_holdout.py
 COPY --chmod=755 container/trellis2/byod/bin/trellis2-prep /usr/local/bin/trellis2-prep
 CMD ["trellis2-prep", "--help"]

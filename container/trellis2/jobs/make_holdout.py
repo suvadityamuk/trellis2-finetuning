@@ -50,22 +50,27 @@ def first_cond_view(renders_root: str, sha256: str) -> str:
     return os.path.join(renders_root, sha256, frames[0]["file_path"])
 
 
-def base_model(object_id: str) -> str:
+def base_model(object_id: str, path_ids: bool = False) -> str:
     """Collapse a GSO id to its base model so colorway/size siblings group together.
 
     Drops a trailing `_in_<color>` / `_Color_<...>` / `_Size_<...>` clause, an
     11-ish-char random hash suffix, and a final CamelCase colorway token
     (e.g. `WhiteCoffeeSand`). Heuristic, but it catches the obvious same-mesh
     variants; distinct models keep distinct keys.
+
+    path_ids (opt-in, `--path-ids`): first reduce a MeshFolder id, which joins path parts
+    with "__", to the object's name: `objects__<id>__model` -> `<id>`, `mesh_glb__<name>`
+    -> `<name>`. Off by default so existing prep runs keep producing the same split.
     """
-    parts = object_id.split("__")             # MeshFolder joins path parts with "__"
-    if len(parts) > 1 and parts[-1].lower() in {"model", "mesh", "scene"}:
-        object_id = parts[-2]                 # `objects__<id>__model` -> `<id>`
-    else:
-        object_id = parts[-1]                 # `mesh_glb__<name>` -> `<name>`
+    if path_ids:
+        parts = object_id.split("__")
+        if len(parts) > 1 and parts[-1].lower() in {"model", "mesh", "scene"}:
+            object_id = parts[-2]
+        else:
+            object_id = parts[-1]
     s = re.split(r"_(?:in|Color|Size)_", object_id)[0]
     s = re.sub(r"_[A-Za-z0-9]{10,}$", "", s)   # trailing hash or long colorway word
-    return (s or object_id).lower()
+    return (s or object_id).lower() if path_ids else s.lower()
 
 
 def main() -> None:
@@ -73,6 +78,8 @@ def main() -> None:
     ap.add_argument("--root", required=True, help="preprocessing root (holds metadata.csv, mesh_dumps/, renders_cond/)")
     ap.add_argument("--frac", type=float, default=0.05, help="fraction of objects to hold out")
     ap.add_argument("--seed", type=int, default=0, help="split seed (fixed so the split is reproducible)")
+    ap.add_argument("--path-ids", action="store_true",
+                    help="group MeshFolder ids (`objects__<id>__model`) by the object's name, not the whole path")
     args = ap.parse_args()
 
     dumps_dir = os.path.join(args.root, "mesh_dumps")
@@ -89,7 +96,7 @@ def main() -> None:
     groups: dict[str, list[str]] = {}
     for sha in eligible:
         obj_id = str(meta.loc[sha, "file_identifier"]) if sha in meta.index else sha
-        groups.setdefault(base_model(obj_id), []).append(sha)
+        groups.setdefault(base_model(obj_id, args.path_ids), []).append(sha)
 
     # Shuffle whole groups, then take groups until we've held out ~frac of objects.
     keys = sorted(groups)

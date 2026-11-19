@@ -44,3 +44,6 @@ In the images, `container/trellis2/` is overlaid on upstream TRELLIS.2 at `/work
 - Adapters target the 512 pipeline (`pipeline_type="512"`).
 - `--workers` above 8 in prep crashes Blender.
 - The trainer drops incomplete batches, so tiny dry runs need `batch_size=1`.
+- The `-prep` / `-train` images are public: changes must stay backwards compatible (same flags,
+  same defaults, same outputs for existing command lines). New behavior goes behind a new
+  opt-in flag, e.g. `trellis2-prep --path-ids`.

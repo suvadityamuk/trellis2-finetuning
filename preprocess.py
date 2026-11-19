@@ -97,24 +97,29 @@ def mesh_from_dump(pickle_path: str):
     return trimesh.util.concatenate(parts) if len(parts) > 1 else parts[0]
 
 
-def base_model(object_id: str) -> str:
+def base_model(object_id: str, path_ids: bool = False) -> str:
     """Collapse an object id to its base model so colorway / size variants group together.
 
     Written for Google Scanned Objects names: drops a trailing `_in_<color>` /
     `_Color_<...>` / `_Size_<...>` clause and a final long hash or CamelCase colorway
     token. For other naming it leaves ids distinct, i.e. a plain seeded split.
+
+    path_ids (opt-in, `--path-ids`): first reduce a MeshFolder id, which joins path parts
+    with "__", to the object's name: `objects__<id>__model` -> `<id>`, `mesh_glb__<name>`
+    -> `<name>`. Off by default so existing runs keep producing the same split.
     """
-    parts = object_id.split("__")             # MeshFolder joins path parts with "__"
-    if len(parts) > 1 and parts[-1].lower() in {"model", "mesh", "scene"}:
-        object_id = parts[-2]                 # `objects__<id>__model` -> `<id>`
-    else:
-        object_id = parts[-1]                 # `mesh_glb__<name>` -> `<name>`
+    if path_ids:
+        parts = object_id.split("__")
+        if len(parts) > 1 and parts[-1].lower() in {"model", "mesh", "scene"}:
+            object_id = parts[-2]
+        else:
+            object_id = parts[-1]
     s = re.split(r"_(?:in|Color|Size)_", object_id)[0]
-    s = re.sub(r"_[A-Za-z0-9]{10,}$", "", s)   # trailing hash or long colorway word
-    return (s or object_id).lower()
+    s = re.sub(r"_[A-Za-z0-9]{10,}$", "", s)
+    return (s or object_id).lower() if path_ids else s.lower()
 
 
-def make_holdout(root: str, frac: float, seed: int) -> None:
+def make_holdout(root: str, frac: float, seed: int, path_ids: bool = False) -> None:
     """Seeded, group-aware split. Writes holdout.txt, holdout_gt/<sha>.glb, eval_testlist.txt.
 
     Only objects that made it through the whole pipeline (a mesh dump for ground truth
@@ -133,7 +138,7 @@ def make_holdout(root: str, frac: float, seed: int) -> None:
     groups: dict[str, list[str]] = {}
     for sha in eligible:
         obj_id = str(meta.loc[sha, "file_identifier"]) if sha in meta.index else sha
-        groups.setdefault(base_model(obj_id), []).append(sha)
+        groups.setdefault(base_model(obj_id, path_ids), []).append(sha)
 
     keys = sorted(groups)
     random.Random(seed).shuffle(keys)                     # shuffle whole groups, take until ~frac
@@ -251,6 +256,9 @@ def parse_args() -> argparse.Namespace:
     ap.add_argument("--max-objects", type=int, default=None, help="only the first N meshes (sorted by path)")
     ap.add_argument("--holdout", type=float, default=0.05, help="fraction held out for evaluation")
     ap.add_argument("--seed", type=int, default=0, help="seed of the held-out split")
+    ap.add_argument("--path-ids", action="store_true",
+                    help="group objects for the held-out split by file name, not full path "
+                         "(use when file names are hashes or each object sits in its own folder)")
     ap.add_argument("--views", type=int, default=16, help="conditioning renders per object")
     ap.add_argument("--workers", type=int, default=8,
                     help="parallel Blender processes (above ~8, Blender startups start crashing)")
@@ -283,7 +291,7 @@ def main() -> None:
         "ss": lambda: run("encode_ss_latent.py", "--shape_latent_name", SHAPE_1024, "--resolution", "64",
                           per_mesh=False),
         "render": lambda: run("render_cond.py", "--num_cond_views", str(args.views), *workers, xvfb=True),
-        "split": lambda: make_holdout(root, args.holdout, args.seed),
+        "split": lambda: make_holdout(root, args.holdout, args.seed, args.path_ids),
         "export": lambda: export_glb(root),
     }
     selected = [s for s in STAGES if s in args.stages]

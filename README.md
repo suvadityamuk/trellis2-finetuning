@@ -133,6 +133,7 @@ hf jobs run -d --flavor a100-large --timeout 6h --secrets HF_TOKEN \
 | `--max-objects` | all | Process only the first N meshes (sorted by path). Use it for a test run |
 | `--holdout` | `0.05` | The fraction of objects to keep for evaluation. Training does not use them |
 | `--seed` | `0` | The random seed for the held-out split. The same seed always gives the same split |
+| `--path-ids` | off | Group the held-out split by object name instead of full path. Use it when file names are hashes or each object sits in its own folder (`<id>/model.obj`); otherwise such objects can all land in one group and be held out together |
 | `--views` | `16` | The number of conditioning renders for each object. Training selects one at random at each step |
 | `--workers` | `8` | The number of parallel Blender processes. In our tests, more than approximately 8 can make Blender crash at startup |
 | `--stages` | all | Run only some of the stages: `index mesh voxel shape ss render split export` |
@@ -321,6 +322,7 @@ with the same resume behaviour and the same output layout.
 | `--push-to`, `--private` | none, off | dataset repo that receives the output after every stage; if it already has data, the run resumes from it |
 | `--max-objects` | all | only the first N meshes, for a dry run |
 | `--holdout`, `--seed` | `0.05`, `0` | held-out fraction and split seed |
+| `--path-ids` | off | group the split by object name, as for `trellis2-prep` |
 | `--views` | `16` | conditioning renders per object |
 | `--workers` | `8` | parallel Blender processes; going above ~8 makes Blender startups crash |
 | `--stages` | all | any subset of `index mesh voxel shape ss render split export` |

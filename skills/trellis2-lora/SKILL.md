@@ -71,6 +71,10 @@ hf jobs run -d --flavor a100-large --timeout 6h --secrets HF_TOKEN \
 
 - Dry run: `--flavor l4x1 --timeout 1h`, `--max-objects 8`, and a `-dryrun` `--push-to` repo.
 - `--meshes-include 'chairs/**'` limits which files are used.
+- **Add `--path-ids` when file names are hashes, or when each object sits in its own folder
+  (`<id>/model.obj`).** It groups the held-out split by object name instead of full path.
+  Without it (the default, kept for reproducibility) such names can all fall into one group,
+  and the split holds out every object.
 - **Never set `--workers` above 8**: Blender startups crash.
 - Eight stages (`index mesh voxel shape ss render split export`). The repo is updated after
   each one, and re-running the identical command resumes. Scale: 12 objects ≈ 16 min on L4.
@@ -135,7 +139,8 @@ loads both adapters into the base pipeline and writes base-vs-LoRA GLBs to a Hub
 | near-duplicate variants land in both train and holdout | name them `<model>_in_<variant>` (or `_Color_`, `_Size_`), or dedupe first |
 | CUDA OOM in training on a 24 GB GPU | `--set batch_size=2 grad_accum=8`, or use `a100-large` |
 | job killed at timeout | re-run the identical command; both commands resume |
-| prep log says `held out N/N objects ... train sees 0` | mesh filenames are hash-like and an older `-prep` image grouped them all together. Train with `--no-holdout`, or rebuild the `-prep` image and re-run `--stages split` |
+| prep log says `held out N/N objects ... train sees 0` | re-run the same prep command with `--stages split --path-ids` (rewrites `holdout.txt` in place, minutes), or train with `--no-holdout` |
+| Trackio warns `could not create a remote client for Space` | both training jobs tried to create a new Space at once; metrics still upload when the run ends. Avoid it by launching the second job once the first has created the Space |
 
 ## Running locally instead of HF Jobs
 

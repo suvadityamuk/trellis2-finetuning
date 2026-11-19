@@ -50,6 +50,9 @@ def parse_args() -> argparse.Namespace:
     ap.add_argument("--max-objects", type=int, default=None, help="process only the first N meshes")
     ap.add_argument("--holdout", type=float, default=0.05, help="fraction held out for evaluation")
     ap.add_argument("--seed", type=int, default=0, help="seed of the held-out split")
+    ap.add_argument("--path-ids", action="store_true",
+                    help="group objects for the held-out split by file name, not full path "
+                         "(use when file names are hashes or each object sits in its own folder)")
     ap.add_argument("--views", type=int, default=16, help="conditioning renders per object")
     ap.add_argument("--workers", type=int, default=8,
                     help="parallel Blender processes (more than ~8 makes Blender startups crash)")
@@ -173,7 +176,7 @@ Produced by `trellis2-prep` from {source}. Train on it with `trellis2-train --la
                                            "--max_workers", str(a.workers), xvfb=True),
             "split": lambda: subprocess.run(
                 ["python", "jobs/make_holdout.py", "--root", self.root, "--frac", str(a.holdout),
-                 "--seed", str(a.seed)], cwd=TRELLIS, check=True),
+                 "--seed", str(a.seed)] + (["--path-ids"] if a.path_ids else []), cwd=TRELLIS, check=True),
             "export": self.export_glb,
         }
         for i, stage in enumerate(STAGES, 1):
