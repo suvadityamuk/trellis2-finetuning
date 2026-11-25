@@ -6,6 +6,7 @@ Needs an NVIDIA GPU with the CUDA extensions in the prebuilt image; on a Mac or 
 
 ## Docs
 
+- [The Definitive Fine-Tuning Guide for 3D Generation Models](https://huggingface.co/blog/3d-lora-finetuning): the blog post that walks through the whole method, data choices and results
 - [README](https://github.com/suvadityamuk/trellis2-finetuning/blob/master/README.md): full documentation: containers, preprocessing, configs, training, evaluation, rebuilding the images
 - [AGENTS.md](https://github.com/suvadityamuk/trellis2-finetuning/blob/master/AGENTS.md): short map of the repo and its invariants for coding agents
 - [Agent skill](https://github.com/suvadityamuk/trellis2-finetuning/blob/master/skills/trellis2-lora/SKILL.md): the whole workflow (preprocess, train, monitor, generate) with guardrails
