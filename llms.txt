@@ -1,0 +1,35 @@
+# TRELLIS.2 LoRA fine-tuning
+
+> Code, containers and an agent skill for LoRA fine-tuning the two geometry flows (sparse structure and shape) of Microsoft's TRELLIS.2-4B image-to-3D model on your own 3D meshes. On 188 Google Scanned Objects shoes, Chamfer distance on held-out shoes fell from 0.174 to 0.033 and F-score@0.02 rose from 0.28 to 0.80. Everything runs on Hugging Face Jobs or a local NVIDIA GPU (24 GB+); data, checkpoints and metrics live on the Hugging Face Hub.
+
+Needs an NVIDIA GPU with the CUDA extensions in the prebuilt image; on a Mac or CPU-only machine, launch on HF Jobs instead. Training needs a Hugging Face token with access to the gated DINOv3 image encoder.
+
+## Docs
+
+- [README](https://github.com/suvadityamuk/trellis2-finetuning/blob/master/README.md): full documentation: containers, preprocessing, configs, training, evaluation, rebuilding the images
+- [AGENTS.md](https://github.com/suvadityamuk/trellis2-finetuning/blob/master/AGENTS.md): short map of the repo and its invariants for coding agents
+- [Agent skill](https://github.com/suvadityamuk/trellis2-finetuning/blob/master/skills/trellis2-lora/SKILL.md): the whole workflow (preprocess, train, monitor, generate) with guardrails
+- [Inference with adapters](https://github.com/suvadityamuk/trellis2-finetuning/blob/master/skills/trellis2-lora/references/inference.md): generate GLBs from images with trained adapters
+- [Config reference](https://github.com/suvadityamuk/trellis2-finetuning/blob/master/skills/trellis2-lora/references/configs.md): LoRA config fields and presets
+
+## Code
+
+- [preprocess.py](https://github.com/suvadityamuk/trellis2-finetuning/blob/master/preprocess.py): meshes to TRELLIS.2 latents and conditioning renders, one file
+- [finetune.py](https://github.com/suvadityamuk/trellis2-finetuning/blob/master/finetune.py): LoRA training of one flow, one file
+- [generate.py](https://github.com/suvadityamuk/trellis2-finetuning/blob/master/skills/trellis2-lora/scripts/generate.py): image to GLB with optional adapters
+
+## Hugging Face
+
+- [Footwear LoRA](https://huggingface.co/suvadityamuk/trellis-2-finetune-gso): trained adapters (use footwear/{ss,shape}_lora/adapter-3000.safetensors), eval metrics and GLBs
+- [Training data](https://huggingface.co/datasets/suvadityamuk/gso-footwear-trellis2-latents): preprocessed GSO footwear latents
+- [Trainer Space](https://huggingface.co/spaces/hugging-3d/3d-model-lora-trainer): launch fine-tuning from the browser
+- [Subset builder Space](https://huggingface.co/spaces/hugging-3d/data-finetuning-subset-builder): pick objects from GSO, Smithsonian, NASA and ABO to train on
+- [Base container](https://huggingface.co/containers/suvadityamuk/trellis2-finetuning), [prep](https://huggingface.co/containers/suvadityamuk/trellis2-finetuning-prep), [train](https://huggingface.co/containers/suvadityamuk/trellis2-finetuning-train)
+- [Base model: microsoft/TRELLIS.2-4B](https://huggingface.co/microsoft/TRELLIS.2-4B) and [paper](https://huggingface.co/papers/2512.14692)
+
+## Optional
+
+- [TRELLIS.2 everywhere collection](https://huggingface.co/collections/hugging-3d/trellis2-everywhere-6b062cf7d5ae3eca49def35b): every related model, dataset and Space
+- [GSO, Smithsonian and NASA latents](https://huggingface.co/datasets/hugging-3d/gso-trellis2-latents): larger preprocessed datasets in hugging-3d
+- [diffusers-3d](https://github.com/suvadityamuk/diffusers-3d): TRELLIS.2 as a diffusers-style pipeline
+- Native ports: [CUDA C++](https://github.com/suvadityamuk/trellis2-cuda), [Metal](https://github.com/suvadityamuk/trellis2-metal), [ROCm](https://github.com/suvadityamuk/trellis2-rocm)
